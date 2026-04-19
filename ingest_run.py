@@ -1,7 +1,8 @@
-import requests
-import yaml
-import duckdb
 from datetime import datetime, timedelta, timezone
+import requests
+import json
+import boto3
+import yaml
 
 # API KEYS
 def keys():
@@ -9,12 +10,12 @@ def keys():
         data = yaml.load(f, Loader=yaml.SafeLoader)
     return data
 
-# CONNECTING TO CONNECTIONS
 def replace_access_token():
     url = "https://www.strava.com/oauth/token"
     payload = {
         "client_id": keys()['CLIENT_ID'],
-        "client_secret": keys()['CLIENT_SECRET'],
+        "client_secret": keys()['CLIENT_SECRET']
+        ,
         "grant_type": "refresh_token",
         "refresh_token": keys()['REFRESH_TOKEN']
     }
@@ -30,132 +31,66 @@ def replace_access_token():
     with open('keys.yml', 'w') as f:
         yaml.dump(data, f, sort_keys=False)
 
-# INGESTING DATA
-def get_weather(latitude,longitude,start_datetime,end_datetime):
-    url = "https://api.open-meteo.com/v1/forecast"
 
-    weather = {}
-    params = {
-        "latitude": latitude,
-        "longitude": longitude,
-        "minutely_15": ['temperature_2m','relative_humidity_2m','precipitation','wind_speed_10m'],
-        "start_minutely_15":start_datetime,
-        "end_minutely_15":end_datetime,
-        "timezone": "GMT"}
-        
-    responses = requests.get(url, params=params).json()
-    
-    temp = responses['minutely_15']['temperature_2m']
-    humid = responses['minutely_15']['relative_humidity_2m']
-    rain = responses['minutely_15']['precipitation']
-    wind = responses['minutely_15']['wind_speed_10m']
-
-    weather.update({'temperature':sum(temp)/len(temp),
-                    'humidity':sum(humid)/len(humid),
-                    'rain':sum(rain)/len(rain),
-                    'wind_speed':sum(wind)/len(wind)
-                    })
-    return weather
-
-def get_location(latitude,longitude):
-    loc_url = "https://geocode.maps.co/reverse"
-    headers = {"Authorization": f"Bearer {keys()['LOC_API_KEY']}"}
-    params = {"lat":latitude, "lon":longitude}
-    location = requests.get(url=loc_url,headers=headers,params=params).json()
-    keyword = list(location["address"].keys())
-    if "town" in keyword:
-        return {"location": location["address"]["town"]}
-    elif "city" in keyword:
-        return {"location": location["address"]["city"]}
-
-def get_activities():
+def obtain_recent_activity_ids(epoch_date):
     url = "https://www.strava.com/api/v3/athlete/activities"
-    params = { "per_page": 5, "page": 1 }
+    params = { "per_page": 50, "page": 1, "after": int(epoch_date) }
     headers = { "Authorization": f"Bearer {keys()['ACCESS_TOKEN']}" }
     res = requests.get(url, params=params, headers=headers)
+    ids = [{'ID':i.get('id'),'start_date':timestamp_to_epoch(i.get('start_date'))} for i in res.json()]
+    return ids
 
+def timestamp_to_epoch(ts_str):
+    # Replace 'Z' with '+00:00' to make it compatible with fromisoformat
+    ts_str = ts_str.replace('Z', '+00:00')
+    dt = datetime.fromisoformat(ts_str)
+    return int(dt.timestamp())
+
+def load_last_timestamp():
+    try:
+        with open("last_timestamp.yml", "r") as f:
+            data = yaml.load(f, Loader=yaml.SafeLoader)
+        return data['last_timestamp']
+    except FileNotFoundError:
+        return "2020-01-01T00:00:00Z"
+
+def save_last_timestamp(timestamp):
+    data = {'last_timestamp': timestamp}
+    with open("last_timestamp.yml", "w") as f:
+        yaml.dump(data, f, sort_keys=False)
+
+def upload_strava_activity(activity_id, prefix="strava/raw"):
+    url = f"https://www.strava.com/api/v3/activities/{activity_id}"
+    params = {"include_all_efforts": 1}
+    headers = {"Authorization": f"Bearer {keys()['ACCESS_TOKEN']}"}
+    res = requests.get(url, params=params, headers=headers)
     data = res.json()
-    activities = {}
-    for i in range(len(data)):
-        if data[i]['type'] == 'Run':
-            activities.update({
-                f"run_{i+1}":{
-                "activity_id": data[i]["id"],
-                "start_datetime":data[i]["start_date"],
-                "end_datetime": "null",
-                "distance_km": data[i]["distance"],  # raw (meters)
-                "moving_time_mins": data[i]["moving_time"],
-                "avg_pace_minskm": "null",
-                "elev_high":data[i]["elev_high"],
-                "elev_low":data[i]["elev_low"],
-                "start_latlng":data[i]["start_latlng"]
-                                }
-                            })
-    return activities
-
-# NORMALISING DATA
-def normalize_times(start_iso: str, moving_seconds: int):
-    dt = datetime.fromisoformat(start_iso)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    dt_utc = dt.astimezone(timezone.utc)
-    end_utc = dt_utc + timedelta(seconds=int(moving_seconds or 0))
-    return {
-        "start_datetime": dt_utc.isoformat()[:-9],
-        "end_datetime": end_utc.isoformat()[:-9]
-    }
-
-def normalising_units(run):
+    bucket = 'strava-running-data'
+    s3 = boto3.client('s3')
     
-    distance_km = run['distance_km'] / 1000
-    moving_time_mins = run['moving_time_mins'] / 60
-    avg_pace_minskm = run['moving_time_mins'] / run['distance_km']
-
-    return {"distance_km":distance_km,
-            "moving_time_mins":moving_time_mins,
-            "avg_pace_minskm":avg_pace_minskm}
-
-# DATABASE CONNECTION
-def get_db_conn(path="activities.db"):
-    return duckdb.connect(path)
-
-def create_activities_table(conn):
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS activities (
-        activity_id TEXT,
-        start_date TEXT,
-        end_date TEXT,        
-        distance_km DOUBLE,
-        moving_time_mins INTEGER,
-        average_speed DOUBLE,
-        elev_high DOUBLE,
-        elev_low DOUBLE,
-        start_latlng TEXT
+    filename = f"activity_{activity_id}.json"
+    key = f"{prefix}/{filename}"
+    
+    s3.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=json.dumps(data),
+        ContentType="application/json",
     )
-    """)
+    print(f"Uploaded activity {activity_id} to s3://{bucket}/{key}")
 
-def record_activities():
-    pass
+replace_access_token()
+last_timestamp = load_last_timestamp()
+bucket = 'strava-running-data'
 
-# 
-try:
-    replace_access_token()
-    activities = get_activities()
+last_timestamp = load_last_timestamp()
+new_ids = obtain_recent_activity_ids(last_timestamp)
 
-    for i in activities:
-        act = activities[i]
-        normalized_times = normalize_times(act['start_datetime'], act['moving_time'])
-        activities[i].update(normalized_times)
+for activity in new_ids:
+    upload_strava_activity(activity['ID'])
 
-        weath = get_weather(act['start_latlng'][0],act['start_latlng'][1],act['start_datetime'],act['end_datetime'])
-        act.update(weath)
-    
-        location = get_location(act['start_latlng'][0],act['start_latlng'][1])
-        activities[i].update(location)
+    if activity['start_date'] > last_timestamp:
+        last_timestamp = activity['start_date']
 
-        units = normalising_units(act)
-        act.update(units)
 
-except:
-    pass
-
+save_last_timestamp(last_timestamp)
