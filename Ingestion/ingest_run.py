@@ -6,7 +6,7 @@ import yaml
 
 # API KEYS
 def keys():
-    with open("keys.yml", "r") as f:
+    with open("../keys.yml", "r") as f:
         data = yaml.load(f, Loader=yaml.SafeLoader)
     return data
 
@@ -25,7 +25,7 @@ def replace_access_token():
 
     access_token = res['access_token']
 
-    with open('keys.yml', 'r') as f:
+    with open('../keys.yml', 'r') as f:
         data = yaml.safe_load(f)
         data['ACCESS_TOKEN'] = access_token
     with open('keys.yml', 'w') as f:
