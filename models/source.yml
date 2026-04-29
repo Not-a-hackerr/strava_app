@@ -1,0 +1,7 @@
+sources:
+  - name: strava_raw_db
+    database: "STRAVA_RAW_DB"
+    schema: "STRAVA"
+    tables:
+      - name: activities_raw
+        description: ""
