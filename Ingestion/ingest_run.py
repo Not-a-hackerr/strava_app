@@ -113,5 +113,4 @@ for activity in new_ids:
     if activity['start_date'] > last_timestamp:
         last_timestamp = activity['start_date']
 
-
 save_last_timestamp(last_timestamp)
