@@ -6,8 +6,7 @@
 
 WITH activities_raw AS (
     SELECT
-        raw_data,
-        ingestested_at
+        *
     FROM {{ source('strava_raw_db', 'activities_raw') }}
 ),
 
