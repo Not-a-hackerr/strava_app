@@ -13,11 +13,13 @@ final AS (
     SELECT
         raw_data:id::NUMBER                 AS activity_id,
         f.value:id::NUMBER                  AS best_effort_id,
-        f.value:name::INT                   AS name,
+        f.value:name::VARCHAR               AS name,
         f.value:distance::FLOAT             AS distance_m,
         f.value:elapsed_time::INT           AS elapsed_time_s,
         f.value:moving_time::FLOAT          AS moving_time_s,
-        f.value:start_date::DATETIME        AS start_date
+        f.value:start_date::DATETIME        AS start_date,
+        f.value:pr_rank::INT                AS pr_rank,
+        ingestested_at
     FROM activities_raw,
     LATERAL FLATTEN(input => raw_data:best_efforts) f
 )

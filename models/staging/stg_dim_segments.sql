@@ -27,7 +27,8 @@ flattened AS (
         f.value:segment.end_latlng[0]::FLOAT    AS end_lat,
         f.value:segment.end_latlng[1]::FLOAT    AS end_lng,
         f.value:segment.hazardous::BOOLEAN      AS hazardous,
-        f.value:segment.private::BOOLEAN        AS private
+        f.value:segment.private::BOOLEAN        AS private,
+        ingestested_at
     FROM activities_raw,
     LATERAL FLATTEN(input => raw_data:segment_efforts) f
 )

@@ -55,7 +55,6 @@ flattened AS (
         raw_data:manual::BOOLEAN                AS manual,
         raw_data:private::BOOLEAN               AS private,
         ingestested_at
-
     FROM activities_raw
 )
 

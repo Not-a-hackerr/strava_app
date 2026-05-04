@@ -23,7 +23,7 @@ SELECT
         NULLIF(distance_m / 1000, 0), 2)            AS pace_mins_per_km,
     ROUND((moving_time_s / 60) /
         NULLIF(distance_m / 1609.34, 0), 2)         AS pace_mins_per_mile,
-    total_elevation_gain,
+    total_elevation_gain_m,
     pace_zone,
     CASE
         WHEN pace_zone = 1 THEN 'Active Recovery'
@@ -33,7 +33,5 @@ SELECT
         WHEN pace_zone = 5 THEN 'VO2 Max'
         ELSE 'Unknown'
     END                                             AS pace_zone_label,
-    start_date,
-    start_date_local,
-    ingestested_at
+    start_date
 FROM {{ ref('stg_laps') }}

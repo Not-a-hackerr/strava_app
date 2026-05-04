@@ -18,6 +18,5 @@ SELECT
     elevation_difference,
     pace_zone,
     ROUND((moving_time_s / 60) / 
-        (distance_m / 1609.34), 2)                  AS pace_mins_per_mile,
-    loaded_at
+        (distance_m / 1609.34), 2)                  AS pace_mins_per_mile
 FROM {{ ref('stg_splits_standard') }}

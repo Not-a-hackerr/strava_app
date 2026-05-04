@@ -13,14 +13,17 @@ final AS (
     SELECT
         raw_data:id::NUMBER                   AS activity_id,
         f.value:id::NUMBER                    AS lap_id,
+        f.value:name::VARCHAR                 AS name,        
         f.value:lap_index::INT                AS lap_index,
         f.value:distance::FLOAT               AS distance_m,
+        f.value:elapsed_time::INT             AS elapsed_time_s,
         f.value:moving_time::INT              AS moving_time_s,
         f.value:average_speed::FLOAT          AS average_speed,
         f.value:max_speed::FLOAT              AS max_speed,
         f.value:total_elevation_gain::FLOAT   AS total_elevation_gain_m,
         f.value:pace_zone::INT                AS pace_zone,
-        f.value:start_date::TIMESTAMP         AS start_date
+        f.value:start_date::TIMESTAMP         AS start_date,
+        ingestested_at
     FROM activities_raw,
     LATERAL FLATTEN(input => raw_data:laps) f
 )

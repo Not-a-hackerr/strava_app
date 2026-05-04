@@ -34,8 +34,5 @@ SELECT
         ELSE 'Top ' || pr_rank::VARCHAR || ' Best'
     END                                             AS pr_label,
 
-    start_date,
-    start_date_local,
-    loaded_at
-
+    start_date
 FROM {{ ref('stg_best_efforts') }}

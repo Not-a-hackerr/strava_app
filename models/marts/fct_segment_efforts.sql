@@ -36,8 +36,5 @@ SELECT
     END                                             AS pr_label,
     hidden,
 
-    start_date,
-    start_date_local,
-    loaded_at
-
+    start_date
 FROM {{ ref('stg_segment_efforts') }}
